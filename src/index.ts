@@ -22,7 +22,7 @@ interface DateParameters {
  * Greeting Tool: Greets a person in a random language
  */
 // Apply tool decorator after function definition
-async function greeting(parameters: GreetingParameters) {
+async function sgcgreeting(parameters: GreetingParameters) {
   const { name, language } = parameters;
   
   // If language not specified, choose randomly
@@ -32,15 +32,15 @@ async function greeting(parameters: GreetingParameters) {
   // Generate greeting based on language
   let greeting: string;
   if (selectedLanguage.toLowerCase() === 'spanish') {
-    greeting = `¡Hola, ${name}! ¿Cómo estás?`;
+    sgcgreeting = `¡Hola, ${name}! ¿Cómo estás?`;
   } else if (selectedLanguage.toLowerCase() === 'french') {
-    greeting = `Bonjour, ${name}! Comment ça va?`;
+    sgcgreeting = `Bonjour, ${name}! Comment ça va?`;
   } else { // Default to English
-    greeting = `Hello, ${name}! How are you?`;
+    sgcgreeting = `Hello, ${name}! How are you?`;
   }
   
   return {
-    greeting,
+    sgcgreeting,
     language: selectedLanguage
   };
 }
@@ -49,7 +49,7 @@ async function greeting(parameters: GreetingParameters) {
  * Today's Date Tool: Returns today's date in the specified format
  */
 // Apply tool decorator after function definition
-async function todaysDate(parameters: DateParameters) {
+async function sgctodaysDate(parameters: DateParameters) {
   const format = parameters.format || '%Y-%m-%d';
   
   // Get today's date
@@ -81,7 +81,7 @@ async function todaysDate(parameters: DateParameters) {
 
 // Register the tools using decorators with explicit parameter definitions
 tool({
-  name: 'greeting',
+  name: 'sgcgreeting',
   description: 'Greets a person in a random language (English, Spanish, or French)',
   parameters: [
     {
@@ -100,7 +100,7 @@ tool({
 })(greeting);
 
 tool({
-  name: 'todays-date',
+  name: 'sgctodays-date',
   description: 'Returns today\'s date in the specified format',
   parameters: [
     {

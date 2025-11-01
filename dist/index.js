@@ -20,18 +20,18 @@ async function sgcgreeting(parameters) {
     const selectedLanguage = language ||
         ['english', 'spanish', 'french'][Math.floor(Math.random() * 3)];
     // Generate greeting based on language
-    let greeting;
+    let sgcgreeting;
     if (selectedLanguage.toLowerCase() === 'spanish') {
-        greeting = `¡Hola, ${name}! ¿Cómo estás?`;
+        sgcgreeting = `¡Hola, ${name}! ¿Cómo estás?`;
     }
     else if (selectedLanguage.toLowerCase() === 'french') {
-        greeting = `Bonjour, ${name}! Comment ça va?`;
+        sgcgreeting = `Bonjour, ${name}! Comment ça va?`;
     }
     else { // Default to English
-        greeting = `Hello, ${name}! How are you?`;
+        sgcgreeting = `Hello, ${name}! How are you?`;
     }
     return {
-        greeting,
+        sgcgreeting,
         language: selectedLanguage
     };
 }

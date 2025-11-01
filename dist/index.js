@@ -14,7 +14,7 @@ const toolsService = new opal_tools_sdk_1.ToolsService(app);
  * Greeting Tool: Greets a person in a random language
  */
 // Apply tool decorator after function definition
-async function greeting(parameters) {
+async function sgcgreeting(parameters) {
     const { name, language } = parameters;
     // If language not specified, choose randomly
     const selectedLanguage = language ||
@@ -39,7 +39,7 @@ async function greeting(parameters) {
  * Today's Date Tool: Returns today's date in the specified format
  */
 // Apply tool decorator after function definition
-async function todaysDate(parameters) {
+async function sgctodaysDate(parameters) {
     const format = parameters.format || '%Y-%m-%d';
     // Get today's date
     const today = new Date();
@@ -70,7 +70,7 @@ async function todaysDate(parameters) {
 }
 // Register the tools using decorators with explicit parameter definitions
 (0, opal_tools_sdk_1.tool)({
-    name: 'greeting',
+    name: 'sgcgreeting',
     description: 'Greets a person in a random language (English, Spanish, or French)',
     parameters: [
         {
@@ -88,7 +88,7 @@ async function todaysDate(parameters) {
     ]
 })(greeting);
 (0, opal_tools_sdk_1.tool)({
-    name: 'todays-date',
+    name: 'sgctodays-date',
     description: 'Returns today\'s date in the specified format',
     parameters: [
         {

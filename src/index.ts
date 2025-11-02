@@ -73,10 +73,10 @@ async function sgctodaysDate(parameters) {
  * Content Density: Analyses a web page for content density
  */
 async function contentdensityevaluator(parameters) {
-  // Helper: get all matches for a tag, return inner text content (no nested parse)
-  function getTagContents(html: string, tag: string): string[] {
+  // --- Helpers -------------------------------------------------
+  function getTagContents(html, tag) {
     const regex = new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, "gi");
-    const out: string[] = [];
+    const out = [];
     let match;
     while ((match = regex.exec(html)) !== null) {
       out.push(match[1]);
@@ -84,33 +84,24 @@ async function contentdensityevaluator(parameters) {
     return out;
   }
 
-  // Helper: strip HTML tags from a block
-  function stripTags(s: string): string {
+  function stripTags(s) {
     return s.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
   }
 
+  // --- Fetch page ----------------------------------------------
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.status}`);
   const html = await res.text();
 
-  // paragraphs
+  // --- Extract key metrics -------------------------------------
   const paragraphHTML = getTagContents(html, "p");
   const paragraphTexts = paragraphHTML.map(stripTags).filter(t => t.length > 0);
 
-  // words
-  const allWords = paragraphTexts
-    .join(" ")
-    .split(/\s+/)
-    .filter(Boolean);
+  const allWords = paragraphTexts.join(" ").split(/\s+/).filter(Boolean);
   const wordCount = allWords.length;
-
-  // images
   const imageCount = (html.match(/<img\b[^>]*>/gi) || []).length;
-
-  // headings
   const headingCount = (html.match(/<h[1-6]\b[^>]*>/gi) || []).length;
 
-  // avg paragraph length
   const paragraphWordCounts = paragraphTexts.map(p =>
     p.split(/\s+/).filter(Boolean).length
   );
@@ -119,15 +110,15 @@ async function contentdensityevaluator(parameters) {
       ? 0
       : paragraphWordCounts.reduce((a, b) => a + b, 0) / paragraphWordCounts.length;
 
-  // crude readability/scanability heuristic
+  // --- Simple scanability heuristic -----------------------------
   let scanabilityScore = 100;
   if (avgParagraphLength > 100) scanabilityScore -= 20;
   if (imageCount === 0) scanabilityScore -= 20;
   if (headingCount === 0) scanabilityScore -= 20;
   if (scanabilityScore < 0) scanabilityScore = 0;
 
-  // notes
-  const notes: string[] = [];
+  // --- Notes / recommendations ---------------------------------
+  const notes = [];
   if (avgParagraphLength > 80) {
     notes.push("Paragraphs are long; consider splitting large blocks of text.");
   } else {
@@ -146,6 +137,7 @@ async function contentdensityevaluator(parameters) {
     notes.push("Has headings to guide the reader.");
   }
 
+  // --- Return structured result --------------------------------
   return {
     url,
     wordCount,
@@ -153,7 +145,7 @@ async function contentdensityevaluator(parameters) {
     headingCount,
     avgParagraphLength: Math.round(avgParagraphLength),
     scanabilityScore,
-    notes,
+    notes
   };
 }
 

@@ -73,47 +73,87 @@ async function sgctodaysDate(parameters) {
  * Content Density: Analyses a web page for content density
  */
 async function contentdensityevaluator(parameters) {
-  const { url } = parameters;
+  // Helper: get all matches for a tag, return inner text content (no nested parse)
+  function getTagContents(html: string, tag: string): string[] {
+    const regex = new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, "gi");
+    const out: string[] = [];
+    let match;
+    while ((match = regex.exec(html)) !== null) {
+      out.push(match[1]);
+    }
+    return out;
+  }
+
+  // Helper: strip HTML tags from a block
+  function stripTags(s: string): string {
+    return s.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  }
+
   const res = await fetch(url);
+  if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.status}`);
   const html = await res.text();
-  const $ = cheerio.load(html);
 
-  const paragraphs = $("p")
-    .map((_, el) => $(el).text().trim().replace(/\s+/g, " "))
-    .get()
+  // paragraphs
+  const paragraphHTML = getTagContents(html, "p");
+  const paragraphTexts = paragraphHTML.map(stripTags).filter(t => t.length > 0);
+
+  // words
+  const allWords = paragraphTexts
+    .join(" ")
+    .split(/\s+/)
     .filter(Boolean);
+  const wordCount = allWords.length;
 
-  const words = paragraphs.join(" ").split(/\s+/).filter(Boolean).length;
-  const images = $("img").length;
-  const headings = $("h1, h2, h3, h4, h5, h6").length;
-  const avgParagraph = paragraphs.length
-    ? paragraphs.reduce((a, p) => a + p.split(/\s+/).length, 0) / paragraphs.length
-    : 0;
+  // images
+  const imageCount = (html.match(/<img\b[^>]*>/gi) || []).length;
 
-  const scanability =
-    100 -
-    (avgParagraph > 100 ? 20 : 0) -
-    (images === 0 ? 20 : 0) -
-    (headings === 0 ? 20 : 0);
+  // headings
+  const headingCount = (html.match(/<h[1-6]\b[^>]*>/gi) || []).length;
+
+  // avg paragraph length
+  const paragraphWordCounts = paragraphTexts.map(p =>
+    p.split(/\s+/).filter(Boolean).length
+  );
+  const avgParagraphLength =
+    paragraphWordCounts.length === 0
+      ? 0
+      : paragraphWordCounts.reduce((a, b) => a + b, 0) / paragraphWordCounts.length;
+
+  // crude readability/scanability heuristic
+  let scanabilityScore = 100;
+  if (avgParagraphLength > 100) scanabilityScore -= 20;
+  if (imageCount === 0) scanabilityScore -= 20;
+  if (headingCount === 0) scanabilityScore -= 20;
+  if (scanabilityScore < 0) scanabilityScore = 0;
+
+  // notes
+  const notes: string[] = [];
+  if (avgParagraphLength > 80) {
+    notes.push("Paragraphs are long; consider splitting large blocks of text.");
+  } else {
+    notes.push("Paragraph length seems reasonable.");
+  }
+
+  if (imageCount === 0) {
+    notes.push("No images found; consider adding supporting visuals.");
+  } else {
+    notes.push("Contains imagery to break up text.");
+  }
+
+  if (headingCount === 0) {
+    notes.push("No headings found; add subheadings to improve scanning.");
+  } else {
+    notes.push("Has headings to guide the reader.");
+  }
 
   return {
     url,
-    wordCount: words,
-    imageCount: images,
-    headingCount: headings,
-    avgParagraphLength: Math.round(avgParagraph),
-    scanabilityScore: Math.max(0, scanability),
-    notes: [
-      avgParagraph > 80
-        ? "Paragraphs are long; consider splitting them."
-        : "Paragraph lengths look healthy.",
-      images === 0
-        ? "No images found; consider adding visuals."
-        : "Has supporting images.",
-      headings === 0
-        ? "Missing headings; add subheads for scannability."
-        : "Good heading structure.",
-    ],
+    wordCount,
+    imageCount,
+    headingCount,
+    avgParagraphLength: Math.round(avgParagraphLength),
+    scanabilityScore,
+    notes,
   };
 }
 

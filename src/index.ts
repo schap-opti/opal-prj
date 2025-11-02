@@ -73,6 +73,7 @@ async function sgctodaysDate(parameters) {
  * Content Density: Analyses a web page for content density
  */
 async function contentdensityevaluator(parameters) {
+  const { url } = parameters;
   // --- Helpers -------------------------------------------------
   function getTagContents(html, tag) {
     const regex = new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, "gi");

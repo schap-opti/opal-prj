@@ -70,7 +70,7 @@ async function sgctodaysDate(parameters) {
 }
 // Register the tools using decorators with explicit parameter definitions
 (0, opal_tools_sdk_1.tool)({
-    name: 'greeting',
+    name: 'sgcgreeting',
     description: 'Greets a person in a random language (English, Spanish, or French)',
     parameters: [
         {
@@ -88,7 +88,7 @@ async function sgctodaysDate(parameters) {
     ]
 })(sgcgreeting);
 (0, opal_tools_sdk_1.tool)({
-    name: 'todays-date',
+    name: 'sgctodays-date',
     description: 'Returns today\'s date in the specified format',
     parameters: [
         {

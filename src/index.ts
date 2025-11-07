@@ -69,6 +69,133 @@ async function sgc_todays_Date(parameters) {
     };
 }
 
+// A single self-contained sentiment analysis function for Opal tools.
+async function analyse_sentiment(parameters) {
+  const { text } = parameters;
+
+  // Inline lexicon and helper sets
+  const LEXICON = {
+    love: 3, loved: 3, lovely: 3, likes: 2, like: 2, awesome: 4, great: 3, good: 2,
+    amazing: 4, excellent: 4, fantastic: 4, happy: 3, joy: 3, win: 2, wins: 2, wow: 2,
+    glad: 2, brilliant: 4, solid: 1, helpful: 2, friendly: 2,
+
+    bad: -2, terrible: -4, awful: -4, horrible: -4, hate: -3, hated: -3, worst: -4,
+    poor: -2, buggy: -2, angry: -2, sad: -2, broken: -3, issue: -1, issues: -1,
+    disappoint: -2, disappointed: -3, disappointing: -3, slow: -1, laggy: -2, crash: -3,
+
+    very: 0, really: 0, super: 0, extremely: 0, slightly: 0, somewhat: 0
+  };
+
+  const BOOSTERS = {
+    very: 1.5,
+    really: 1.3,
+    super: 1.6,
+    extremely: 1.8,
+    slightly: 0.7,
+    somewhat: 0.8
+  };
+
+  const NEGATIONS = new Set([
+    'not', 'no', 'never', 'none', 'hardly', 'scarcely', 'barely',
+    "isn't", "wasn't", "weren't",
+    "don't", "doesn't", "didn't",
+    "won't", "can't", "couldn't", "shouldn't"
+  ]);
+
+  const EMOJI_HINTS = {
+    '🙂': 2, '😊': 3, '😁': 3, '😍': 4, '🥰': 3, '👍': 2, '🎉': 3, '🔥': 2,
+    '🙁': -2, '😞': -2, '😡': -3, '🤮': -4, '👎': -2, '💀': -3
+  };
+
+  // Helpers inside the function
+  const tokenize = (input) =>
+    (input || "")
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s🙂😊😁😍🥰👍🎉🔥🙁😞😡🤮👎💀']/gu, ' ')
+      .split(/\s+/)
+      .filter(Boolean);
+
+  const stem = (word) =>
+    word.replace(/(ing|ed|ly|ies|s)$/u, (m) => (m === "ies" ? "y" : ""));
+
+  // Begin sentiment scoring
+  const tokens = tokenize(text);
+  let runningScore = 0;
+  let polarized = 0;
+  let negationWindow = 0;
+  let negationCount = 0;
+
+  const tokenDetails = [];
+
+  // Emoji sentiment
+  const emojiScore = Array.from(text || "")
+    .map((ch) => EMOJI_HINTS[ch] || 0)
+    .reduce((a, b) => a + b, 0);
+
+  for (let i = 0; i < tokens.length; i++) {
+    const raw = tokens[i];
+    const s = stem(raw);
+
+    if (NEGATIONS.has(s)) {
+      negationWindow = 3;
+      negationCount++;
+      tokenDetails.push({ token: raw, stem: s, weight: 0, negated: false, boost: 1, contribution: 0 });
+      continue;
+    }
+
+    let weight = LEXICON[s] || 0;
+    const isBooster = BOOSTERS[s] !== undefined;
+
+    if (isBooster) {
+      tokenDetails.push({ token: raw, stem: s, weight: 0, negated: false, boost: BOOSTERS[s], contribution: 0 });
+      continue;
+    }
+
+    // Booster multipliers (look back up to 2 tokens)
+    let boost = 1;
+    for (let back = 1; back <= 2 && i - back >= 0; back++) {
+      const prev = stem(tokens[i - back]);
+      if (BOOSTERS[prev]) boost *= BOOSTERS[prev];
+    }
+
+    let negated = false;
+    if (weight !== 0) {
+      polarized++;
+      if (negationWindow > 0) {
+        weight = -weight;
+        negated = true;
+        negationWindow--;
+      }
+    }
+
+    const contribution = weight * boost;
+    runningScore += contribution;
+
+    tokenDetails.push({ token: raw, stem: s, weight, negated, boost, contribution });
+  }
+
+  const totalScore = runningScore + emojiScore;
+  const comparative = polarized > 0 ? totalScore / polarized : 0;
+
+  let label = "neutral";
+  if (totalScore > 0.75) label = "positive";
+  else if (totalScore < -0.75) label = "negative";
+
+  return {
+    score: Number(totalScore.toFixed(3)),
+    comparative: Number(comparative.toFixed(3)),
+    label,
+    tokens: tokenDetails,
+    emojiScore,
+    details: {
+      totalTokens: tokens.length,
+      polarizedTokens: polarized,
+      negationCount
+    }
+  };
+}
+
+
 /**
  * Content Density: Analyses a web page for content density
  */
@@ -562,6 +689,20 @@ async function speed_heuristics_checker(parameters) {
         },
     ]
 })(content_density_evaluator);
+
+// Register the tools using decorators with explicit parameter definitions
+(0, opal_tools_sdk_1.tool)({
+    name: 'analyse_sentiment',
+    description: 'Analyses a content for sentiment',
+    parameters: [
+        {
+            name: 'text',
+            type: opal_tools_sdk_1.ParameterType.String,
+            description: 'text to analyse',
+            required: true
+        },
+    ]
+})(analyse_sentiment);
 
 // Register the tools using decorators with explicit parameter definitions
 (0, opal_tools_sdk_1.tool)({

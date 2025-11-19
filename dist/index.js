@@ -1,24 +1,20 @@
 "use strict";
-
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
-
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const opal_tools_sdk_1 = require("@optimizely-opal/opal-tools-sdk");
-
 // Create Express app
 const app = (0, express_1.default)();
 app.use(express_1.default.json());
-
 // Create Tools Service
 const toolsService = new opal_tools_sdk_1.ToolsService(app);
 /**
  * Greeting Tool: Greets a person in a random language
  */
 // Apply tool decorator after function definition
-async function sgc_greeting(parameters) {
+async function greeting(parameters) {
     const { name, language } = parameters;
     // If language not specified, choose randomly
     const selectedLanguage = language ||
@@ -39,13 +35,42 @@ async function sgc_greeting(parameters) {
         language: selectedLanguage
     };
 }
-
-// Example:
-// (async () => console.log(await speedHeuristicsChecker("https://example.com")))();
-
+/**
+ * Today's Date Tool: Returns today's date in the specified format
+ */
+// Apply tool decorator after function definition
+async function todaysDate(parameters) {
+    const format = parameters.format || '%Y-%m-%d';
+    // Get today's date
+    const today = new Date();
+    // Format the date (simplified implementation)
+    let formattedDate;
+    if (format === '%Y-%m-%d') {
+        formattedDate = today.toISOString().split('T')[0];
+    }
+    else if (format === '%B %d, %Y') {
+        formattedDate = today.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+    }
+    else if (format === '%d/%m/%Y') {
+        formattedDate = today.toLocaleDateString('en-GB');
+    }
+    else {
+        // Default to ISO format
+        formattedDate = today.toISOString().split('T')[0];
+    }
+    return {
+        date: formattedDate,
+        format: format,
+        timestamp: today.getTime() / 1000
+    };
+}
 // Register the tools using decorators with explicit parameter definitions
 (0, opal_tools_sdk_1.tool)({
-    name: 'sgc_greeting',
+    name: 'greeting',
     description: 'Greets a person in a random language (English, Spanish, or French)',
     parameters: [
         {
@@ -61,9 +86,9 @@ async function sgc_greeting(parameters) {
             required: false
         }
     ]
-})(sgc_greeting);
+})(greeting);
 (0, opal_tools_sdk_1.tool)({
-    name: 'sgc_todays_date',
+    name: 'todays-date',
     description: 'Returns today\'s date in the specified format',
     parameters: [
         {
@@ -73,7 +98,7 @@ async function sgc_greeting(parameters) {
             required: false
         }
     ]
-})(sgc_todays_Date);
+})(todaysDate);
 // Start the server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

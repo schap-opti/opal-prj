@@ -22,7 +22,7 @@ interface DateParameters {
  * Greeting Tool: Greets a person in a random language
  */
 // Apply tool decorator after function definition
-async function sgcgreeting(parameters: GreetingParameters) {
+async function greeting(parameters: GreetingParameters) {
   const { name, language } = parameters;
   
   // If language not specified, choose randomly
@@ -32,15 +32,15 @@ async function sgcgreeting(parameters: GreetingParameters) {
   // Generate greeting based on language
   let greeting: string;
   if (selectedLanguage.toLowerCase() === 'spanish') {
-    sgcgreeting = `¡Hola, ${name}! ¿Cómo estás?`;
+    greeting = `¡Hola, ${name}! ¿Cómo estás?`;
   } else if (selectedLanguage.toLowerCase() === 'french') {
-    sgcgreeting = `Bonjour, ${name}! Comment ça va?`;
+    greeting = `Bonjour, ${name}! Comment ça va?`;
   } else { // Default to English
-    sgcgreeting = `Hello, ${name}! How are you?`;
+    greeting = `Hello, ${name}! How are you?`;
   }
   
   return {
-    sgcgreeting,
+    greeting,
     language: selectedLanguage
   };
 }
@@ -49,7 +49,7 @@ async function sgcgreeting(parameters: GreetingParameters) {
  * Today's Date Tool: Returns today's date in the specified format
  */
 // Apply tool decorator after function definition
-async function sgctodaysDate(parameters: DateParameters) {
+async function todaysDate(parameters: DateParameters) {
   const format = parameters.format || '%Y-%m-%d';
   
   // Get today's date
@@ -81,7 +81,7 @@ async function sgctodaysDate(parameters: DateParameters) {
 
 // Register the tools using decorators with explicit parameter definitions
 tool({
-  name: 'sgcgreeting',
+  name: 'greeting',
   description: 'Greets a person in a random language (English, Spanish, or French)',
   parameters: [
     {
@@ -97,10 +97,10 @@ tool({
       required: false
     }
   ]
-})(sgcgreeting);
+})(greeting);
 
 tool({
-  name: 'sgctodays-date',
+  name: 'todays-date',
   description: 'Returns today\'s date in the specified format',
   parameters: [
     {
@@ -110,11 +110,4 @@ tool({
       required: false
     }
   ]
-})(sgctodaysDate);
-
-// Start the server
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`Discovery endpoint: http://localhost:${PORT}/discovery`);
-});
+})(todaysDate);

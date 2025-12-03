@@ -15,8 +15,8 @@ interface GreetingParameters {
 }
 
 // Interfaces for tool parameters
-interface HeuristicsParameters {
-  url: string;
+interface SentimentParameters {
+  text: string;
 }
 
 interface DateParameters {
@@ -84,127 +84,129 @@ async function sgctodaysDate(parameters: DateParameters) {
   };
 }
 
-async function speed_heuristics_checker(parameters) {
-  const { url } = parameters;
-  if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.status}`);
-  const html = await res.text();
+// A single self-contained sentiment analysis function for Opal tools.
+async function analyse_sentiment(parameters) {
+  const { text } = parameters;
 
-  // Extract <script ...>...</script>
-  const scriptMatches = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)];
+  // Inline lexicon and helper sets
+  const LEXICON = {
+    love: 3, loved: 3, lovely: 3, likes: 2, like: 2, awesome: 4, great: 3, good: 2,
+    amazing: 4, excellent: 4, fantastic: 4, happy: 3, joy: 3, win: 2, wins: 2, wow: 2,
+    glad: 2, brilliant: 4, solid: 1, helpful: 2, friendly: 2,
 
-  let totalScripts = 0;
-  let blockingScripts = 0; // scripts without defer/async
-  let inlineBytes = 0;
+    bad: -2, terrible: -4, awful: -4, horrible: -4, hate: -3, hated: -3, worst: -4,
+    poor: -2, buggy: -2, angry: -2, sad: -2, broken: -3, issue: -1, issues: -1,
+    disappoint: -2, disappointed: -3, disappointing: -3, slow: -1, laggy: -2, crash: -3,
 
-  for (const match of scriptMatches) {
-    totalScripts++;
+    very: 0, really: 0, super: 0, extremely: 0, slightly: 0, somewhat: 0
+  };
 
-    const attrs = match[1] || "";
-    const body = match[2] || "";
+  const BOOSTERS = {
+    very: 1.5,
+    really: 1.3,
+    super: 1.6,
+    extremely: 1.8,
+    slightly: 0.7,
+    somewhat: 0.8
+  };
 
-    const hasDefer = /\bdefer\b/i.test(attrs);
-    const hasAsync = /\basync\b/i.test(attrs);
-    const hasSrc = /\bsrc\s*=\s*["'][^"']+["']/i.test(attrs);
+  const NEGATIONS = new Set([
+    'not', 'no', 'never', 'none', 'hardly', 'scarcely', 'barely',
+    "isn't", "wasn't", "weren't",
+    "don't", "doesn't", "didn't",
+    "won't", "can't", "couldn't", "shouldn't"
+  ]);
 
-    // blocking if it's external <script src="..."> with no defer/async,
-    // or inline script in <head> (we can't perfectly detect "in head" without DOM,
-    // so we simplify: any script without defer/async counts as potentially blocking).
-    if (!hasDefer && !hasAsync) {
-      blockingScripts++;
+  const EMOJI_HINTS = {
+    '🙂': 2, '😊': 3, '😁': 3, '😍': 4, '🥰': 3, '👍': 2, '🎉': 3, '🔥': 2,
+    '🙁': -2, '😞': -2, '😡': -3, '🤮': -4, '👎': -2, '💀': -3
+  };
+
+  // Helpers inside the function
+  const tokenize = (input) =>
+    (input || "")
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s🙂😊😁😍🥰👍🎉🔥🙁😞😡🤮👎💀']/gu, ' ')
+      .split(/\s+/)
+      .filter(Boolean);
+
+  const stem = (word) =>
+    word.replace(/(ing|ed|ly|ies|s)$/u, (m) => (m === "ies" ? "y" : ""));
+
+  // Begin sentiment scoring
+  const tokens = tokenize(text);
+  let runningScore = 0;
+  let polarized = 0;
+  let negationWindow = 0;
+  let negationCount = 0;
+
+  const tokenDetails = [];
+
+  // Emoji sentiment
+  const emojiScore = Array.from(text || "")
+    .map((ch) => EMOJI_HINTS[ch] || 0)
+    .reduce((a, b) => a + b, 0);
+
+  for (let i = 0; i < tokens.length; i++) {
+    const raw = tokens[i];
+    const s = stem(raw);
+
+    if (NEGATIONS.has(s)) {
+      negationWindow = 3;
+      negationCount++;
+      tokenDetails.push({ token: raw, stem: s, weight: 0, negated: false, boost: 1, contribution: 0 });
+      continue;
     }
 
-    // inline weight: only count inline JS (no src)
-    if (!hasSrc) {
-      inlineBytes += Buffer.byteLength(body, "utf8");
-    }
-  }
+    let weight = LEXICON[s] || 0;
+    const isBooster = BOOSTERS[s] !== undefined;
 
-  // Extract <img ...> tags
-  const imgMatches = [...html.matchAll(/<img\b([^>]*?)>/gi)];
-  let totalImages = 0;
-  let noLazy = 0;
-  let suspectedLarge = 0;
-  for (const m of imgMatches) {
-    totalImages++;
-    const attrs = m[1] || "";
-
-    // lazy?
-    const hasLazy = /\bloading\s*=\s*["']lazy["']/i.test(attrs);
-    if (!hasLazy) {
-      noLazy++;
+    if (isBooster) {
+      tokenDetails.push({ token: raw, stem: s, weight: 0, negated: false, boost: BOOSTERS[s], contribution: 0 });
+      continue;
     }
 
-    // "suspected large" heuristic:
-    // if src ends with .png or .jpg and width/height hints look big
-    // We'll just detect .png/.jpg/.jpeg and presence of big-ish width number.
-    const srcMatch = attrs.match(/\bsrc\s*=\s*["']([^"']+)["']/i);
-    const widthMatch = attrs.match(/\bwidth\s*=\s*["'](\d+)["']/i);
-    const heightMatch = attrs.match(/\bheight\s*=\s*["'](\d+)["']/i);
-    const srcVal = srcMatch ? srcMatch[1].toLowerCase() : "";
-    const widthVal = widthMatch ? parseInt(widthMatch[1], 10) : null;
-    const heightVal = heightMatch ? parseInt(heightMatch[1], 10) : null;
-
-    // naive: if it's a big raster and width or height > 1000, treat as "large"
-    if (
-      (srcVal.endsWith(".png") ||
-        srcVal.endsWith(".jpg") ||
-        srcVal.endsWith(".jpeg")) &&
-      ((widthVal && widthVal > 1000) || (heightVal && heightVal > 1000))
-    ) {
-      suspectedLarge++;
+    // Booster multipliers (look back up to 2 tokens)
+    let boost = 1;
+    for (let back = 1; back <= 2 && i - back >= 0; back++) {
+      const prev = stem(tokens[i - back]);
+      if (BOOSTERS[prev]) boost *= BOOSTERS[prev];
     }
+
+    let negated = false;
+    if (weight !== 0) {
+      polarized++;
+      if (negationWindow > 0) {
+        weight = -weight;
+        negated = true;
+        negationWindow--;
+      }
+    }
+
+    const contribution = weight * boost;
+    runningScore += contribution;
+
+    tokenDetails.push({ token: raw, stem: s, weight, negated, boost, contribution });
   }
 
-  // Performance smell score: start from 100, subtract penalties
-  let perfScore = 100;
-  // too many scripts
-  if (totalScripts > 10) perfScore -= (totalScripts - 10) * 2;
-  // too many blocking
-  if (blockingScripts > 5) perfScore -= (blockingScripts - 5) * 4;
-  // heavy inline JS
-  if (inlineBytes > 50_000) perfScore -= 15; // >50KB inline
-  if (inlineBytes > 150_000) perfScore -= 20; // >150KB inline (extra hit)
-  // missing lazy loading
-  if (noLazy > 0 && totalImages > 0) {
-    const ratioNoLazy = noLazy / totalImages;
-    if (ratioNoLazy > 0.5) perfScore -= 10;
-  }
-  // suspected big images
-  if (suspectedLarge > 0) perfScore -= suspectedLarge * 5;
-  if (perfScore < 0) perfScore = 0;
+  const totalScore = runningScore + emojiScore;
+  const comparative = polarized > 0 ? totalScore / polarized : 0;
 
-  const notes = [];
-  notes.push(`${totalScripts} <script> tags detected.`);
-  if (blockingScripts > 0) {
-    notes.push(`${blockingScripts} script(s) without async/defer (possible render-blockers).`);
-  } else {
-    notes.push("Most scripts appear async/defer ✅");
-  }
-
-  if (inlineBytes > 0) {
-    notes.push(`Inline JS total ~${Math.round(inlineBytes / 1024)}KB.`);
-  }
-
-  if (totalImages > 0) {
-    notes.push(`${noLazy}/${totalImages} images missing loading="lazy".`);
-  } else {
-    notes.push("No <img> tags detected.");
-  }
-
-  if (suspectedLarge > 0) {
-    notes.push(`${suspectedLarge} image(s) look very large ( >1000px dimension hints ).`);
-  }
+  let label = "neutral";
+  if (totalScore > 0.75) label = "positive";
+  else if (totalScore < -0.75) label = "negative";
 
   return {
-    url,
-    totalScripts,
-    blockingScripts,
-    inlineScriptKB: Math.round(inlineBytes / 1024),
-    totalImages,
-    imagesMissingLazyLoad: noLazy,
-    suspectedLargeImages: suspectedLarge,
-    performanceSmellScore: perfScore,
-    notes
+    score: Number(totalScore.toFixed(3)),
+    comparative: Number(comparative.toFixed(3)),
+    label,
+    tokens: tokenDetails,
+    emojiScore,
+    details: {
+      totalTokens: tokens.length,
+      polarizedTokens: polarized,
+      negationCount
+    }
   };
 }
 
@@ -243,17 +245,17 @@ tool({
 
 // Register the tools using decorators with explicit parameter definitions
 (0, opal_tools_sdk_1.tool)({
-    name: 'speed_heuristics_checker',
-    description: 'Analyses a web page for speed heuristics',
+    name: 'analyse_sentiment',
+    description: 'Analyses a content for sentiment',
     parameters: [
         {
-            name: 'url',
+            name: 'text',
             type: opal_tools_sdk_1.ParameterType.String,
-            description: 'URL to analyse',
+            description: 'text to analyse',
             required: true
         },
     ]
-})(speed_heuristics_checker);
+})(analyse_sentiment);
 
 // Start the server
 const PORT = process.env.PORT || 3000;
